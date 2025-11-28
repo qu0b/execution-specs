@@ -2347,7 +2347,9 @@ def test_bal_all_transaction_types(
                     storage_changes=[
                         BalStorageSlot(
                             slot=0x01,
-                            slot_changes=[BalStorageChange(tx_index=1, post_value=0x01)],
+                            slot_changes=[
+                                BalStorageChange(tx_index=1, post_value=0x01)
+                            ],
                         )
                     ],
                 ),
@@ -2356,7 +2358,9 @@ def test_bal_all_transaction_types(
                     storage_changes=[
                         BalStorageSlot(
                             slot=0x01,
-                            slot_changes=[BalStorageChange(tx_index=2, post_value=0x02)],
+                            slot_changes=[
+                                BalStorageChange(tx_index=2, post_value=0x02)
+                            ],
                         )
                     ],
                 ),
@@ -2367,7 +2371,9 @@ def test_bal_all_transaction_types(
                     storage_changes=[
                         BalStorageSlot(
                             slot=0x01,
-                            slot_changes=[BalStorageChange(tx_index=3, post_value=0x03)],
+                            slot_changes=[
+                                BalStorageChange(tx_index=3, post_value=0x03)
+                            ],
                         )
                     ],
                 ),
@@ -2376,7 +2382,9 @@ def test_bal_all_transaction_types(
                     storage_changes=[
                         BalStorageSlot(
                             slot=0x01,
-                            slot_changes=[BalStorageChange(tx_index=4, post_value=0x04)],
+                            slot_changes=[
+                                BalStorageChange(tx_index=4, post_value=0x04)
+                            ],
                         )
                     ],
                 ),
@@ -2392,7 +2400,9 @@ def test_bal_all_transaction_types(
                     storage_changes=[
                         BalStorageSlot(
                             slot=0x01,
-                            slot_changes=[BalStorageChange(tx_index=5, post_value=0x05)],
+                            slot_changes=[
+                                BalStorageChange(tx_index=5, post_value=0x05)
+                            ],
                         )
                     ],
                 ),
@@ -2643,7 +2653,8 @@ def test_bal_create_selfdestruct_to_self_with_call(
                     # Balance changes: loses endowment (100)
                     balance_changes=[
                         BalBalanceChange(
-                            tx_index=1, post_balance=factory_balance - endowment
+                            tx_index=1,
+                            post_balance=factory_balance - endowment,
                         )
                     ],
                 ),
@@ -2730,7 +2741,9 @@ def test_bal_revert_insufficient_funds(
     contract = pre.deploy_contract(
         code=contract_code,
         balance=contract_balance,
-        storage={0x02: 0xDEAD},  # Non-zero initial value so SSTORE(0) is a change
+        storage={
+            0x02: 0xDEAD
+        },  # Non-zero initial value so SSTORE(0) is a change
     )
 
     tx = Transaction(
@@ -3000,7 +3013,9 @@ def test_bal_selfdestruct_to_precompile(
                 # Explicitly verify ALL fields to avoid false positives
                 victim: BalAccountExpectation(
                     nonce_changes=[],  # Contract nonce unchanged
-                    balance_changes=[BalBalanceChange(tx_index=1, post_balance=0)],
+                    balance_changes=[
+                        BalBalanceChange(tx_index=1, post_balance=0)
+                    ],
                     code_changes=[],  # Code unchanged (post-Cancun SELFDESTRUCT)
                     storage_changes=[],  # No storage changes
                     storage_reads=[],  # No storage reads
@@ -3010,7 +3025,9 @@ def test_bal_selfdestruct_to_precompile(
                 ecrecover_precompile: BalAccountExpectation(
                     nonce_changes=[],  # MUST NOT have nonce changes
                     balance_changes=[
-                        BalBalanceChange(tx_index=1, post_balance=contract_balance)
+                        BalBalanceChange(
+                            tx_index=1, post_balance=contract_balance
+                        )
                     ],
                     code_changes=[],  # MUST NOT have code changes
                     storage_changes=[],  # MUST NOT have storage changes
@@ -3082,7 +3099,9 @@ def test_bal_create_early_failure(
     )
 
     # Calculate what the contract address WOULD be (but it won't be created)
-    would_be_contract_address = compute_create_address(address=factory, nonce=1)
+    would_be_contract_address = compute_create_address(
+        address=factory, nonce=1
+    )
 
     tx = Transaction(
         sender=alice,
@@ -3123,7 +3142,9 @@ def test_bal_create_early_failure(
         post={
             alice: Account(nonce=1),
             # Factory nonce unchanged (still 1), balance unchanged
-            factory: Account(nonce=1, balance=factory_balance, storage={0x00: 0}),
+            factory: Account(
+                nonce=1, balance=factory_balance, storage={0x00: 0}
+            ),
             # Contract was never created
             would_be_contract_address: Account.NONEXISTENT,
         },
