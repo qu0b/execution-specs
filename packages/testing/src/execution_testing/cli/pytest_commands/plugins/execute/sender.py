@@ -410,20 +410,23 @@ def sync_worker_key_nonce(eth_rpc: EthRPC, session_worker_key: EOA) -> Account:
     """
     Synchronize the worker key nonce with the on-chain nonce.
 
-    Fetch the account state and update the local nonce if it differs
-    from the RPC nonce. This handles both nonce increases (normal
-    progression) and decreases (chain reverts).
+    Fetch the account state using the "pending" block tag so that mempool
+    transactions are included in the nonce count. Using "latest" (confirmed
+    only) causes a cascade failure: if a previous test's tx landed in the
+    mempool but was not yet mined, "latest" returns a stale nonce and resets
+    the local counter backwards, causing every subsequent test to collide with
+    the pending tx ("replacement transaction underpriced").
 
     Return the fetched account for further use.
     """
     try:
         session_worker_account = eth_rpc.get_account(
-            session_worker_key, block_number="latest", skip_code=True
+            session_worker_key, block_number="pending", skip_code=True
         )
     except JSONRPCError:
-        logger.debug("Latest state not available, falling back to pending")
+        logger.debug("Pending state not available, falling back to latest")
         session_worker_account = eth_rpc.get_account(
-            session_worker_key, block_number="pending", skip_code=True
+            session_worker_key, block_number="latest", skip_code=True
         )
     rpc_nonce = Number(session_worker_account.nonce)
     if rpc_nonce != session_worker_key.nonce:
