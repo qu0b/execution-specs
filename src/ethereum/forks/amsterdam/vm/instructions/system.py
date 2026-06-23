@@ -42,7 +42,6 @@ from .. import (
     Evm,
     Message,
     credit_state_gas_refund,
-    emit_burn_log,
     emit_transfer_log,
     incorporate_child_on_error,
     incorporate_child_on_success,
@@ -687,16 +686,19 @@ def selfdestruct(evm: Evm) -> None:
     # Transfer balance
     move_ether(tx_state, originator, beneficiary, originator_balance)
 
-    # Emit transfer or burn log
-    if originator in tx_state.created_accounts and beneficiary == originator:
-        emit_burn_log(evm, originator, originator_balance)
-    elif beneficiary != originator:
+    # Emit transfer log (EIP-7708). EIP-8246 removes the burn case entirely:
+    # when originator == beneficiary in a same-tx creation, balance is preserved
+    # (no burn, no burn log). Non-self transfers still emit a Transfer log.
+    if beneficiary != originator:
         emit_transfer_log(evm, originator, beneficiary, originator_balance)
 
-    # Register account for deletion iff created in same transaction
+    # Register account for deletion iff created in same transaction (EIP-6780).
+    # EIP-8246: skip balance zeroing when beneficiary == originator — balance
+    # is preserved at finalization. For other beneficiaries, move_ether already
+    # zeroed the originator's balance; the explicit zero is kept defensively.
     if originator in tx_state.created_accounts:
-        # If beneficiary and originator are the same then the ether is burnt.
-        set_account_balance(tx_state, originator, U256(0))
+        if beneficiary != originator:
+            set_account_balance(tx_state, originator, U256(0))
         evm.accounts_to_delete.add(originator)
 
     # HALT the execution

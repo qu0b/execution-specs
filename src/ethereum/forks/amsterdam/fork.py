@@ -31,6 +31,7 @@ from ethereum.exceptions import (
 from ethereum.forks.bpo5.blocks import Header as PreviousHeader
 from ethereum.merkle_patricia_trie import root, trie_set
 from ethereum.state import (
+    Account,
     EMPTY_CODE_HASH,
     Address,
     BlockDiff,
@@ -72,11 +73,13 @@ from .state_tracker import (
     TransactionState,
     create_ether,
     destroy_account,
+    destroy_storage,
     extract_block_diff,
     get_account,
     get_code,
     incorporate_tx_into_block,
     increment_nonce,
+    set_account,
     set_account_balance,
 )
 from .transactions import (
@@ -1098,25 +1101,10 @@ def process_transaction(
     # transfer miner fees
     create_ether(tx_state, block_env.coinbase, U256(transaction_fee))
 
-    # EIP-7708: Emit burn logs for balances held by accounts marked for
-    # deletion AFTER miner fee transfer.
-    finalization_logs: List[Log] = []
-    for address in sorted(tx_output.accounts_to_delete):
-        balance = get_account(tx_state, address).balance
-        if balance > U256(0):
-            padded_address = left_pad_zero_bytes(address, 32)
-            finalization_logs.append(
-                Log(
-                    address=vm.SYSTEM_ADDRESS,
-                    topics=(
-                        vm.BURN_TOPIC,
-                        Hash32(padded_address),
-                    ),
-                    data=balance.to_be_bytes32(),
-                )
-            )
-
-    all_logs = tx_output.logs + tuple(finalization_logs)
+    # EIP-8246 removes all ETH burn cases from SELFDESTRUCT. Accounts marked
+    # for deletion in accounts_to_delete now preserve their balance instead of
+    # burning it, so no finalization burn logs are emitted.
+    all_logs = tx_output.logs
 
     tx_state_gas = (
         int(tx_env.intrinsic_state_gas)
@@ -1148,7 +1136,26 @@ def process_transaction(
     block_output.block_logs += all_logs
 
     for address in tx_output.accounts_to_delete:
-        destroy_account(tx_state, address)
+        balance = get_account(tx_state, address).balance
+        if balance > U256(0):
+            # EIP-8246: balance is preserved. Clear code/storage/nonce but
+            # keep the account alive as a balance-only account.
+            # EIP-161: if the resulting balance is 0 the account would be
+            # empty and deleted — but balance > 0 here, so it survives.
+            destroy_storage(tx_state, address)
+            set_account(
+                tx_state,
+                address,
+                Account(
+                    nonce=Uint(0),
+                    balance=balance,
+                    code_hash=EMPTY_CODE_HASH,
+                ),
+            )
+        else:
+            # Balance is zero; full account deletion (EIP-161 handles
+            # empty-account cleanup).
+            destroy_account(tx_state, address)
 
     incorporate_tx_into_block(tx_state, block_env.block_access_list_builder)
 
