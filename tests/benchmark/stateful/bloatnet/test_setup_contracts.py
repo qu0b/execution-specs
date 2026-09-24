@@ -42,6 +42,8 @@ RECEIVER_CONTRACT_COUNT = int(
 CONTRACT_MODES = [
     AccountMode.EXISTING_CONTRACT_SAME_MAX,
     AccountMode.EXISTING_CONTRACT_DIFF_MAX,
+    # test_account_access reads JUMPDEST receivers at every code size.
+    AccountMode.EXISTING_CONTRACT_JUMPDEST,
 ]
 
 # Factory-frame and initcode execution costs (CALLDATACOPY, the MCOPY
@@ -136,8 +138,6 @@ def test_deploy_existing_contracts(
     # so a second deployment would collide and revert the factory.
     if code_size == Osaka.max_code_size():
         contract_modes.append(AccountMode.EXISTING_CONTRACT_MINIMAL)
-    if code_size == Amsterdam.max_code_size():
-        contract_modes.append(AccountMode.EXISTING_CONTRACT_JUMPDEST)
 
     txs = []
     post: dict = {}
