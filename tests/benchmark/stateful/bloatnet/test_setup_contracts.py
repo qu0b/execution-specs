@@ -102,36 +102,12 @@ def deployment_gas(
     return regular, state
 
 
-# Osaka-sized contracts are deployable from Osaka: the only Amsterdam
-# dependency here is the larger code size itself, and `create_state_gas`
-# returns 0 before EIP-8037. Filling this pre-fork lets a shadow fork carry
-# the receivers across the Amsterdam transition instead of starting past it.
-@pytest.mark.valid_from("Osaka")
-@pytest.mark.parametrize(
-    "code_size",
-    [
-        pytest.param(
-            Osaka.max_code_size(), marks=pytest.mark.valid_from("Osaka")
-        ),
-        pytest.param(
-            Amsterdam.max_code_size(),
-            marks=pytest.mark.valid_from("Amsterdam"),
-        ),
-    ],
-)
-def test_deploy_existing_contracts(
-    benchmark_test: BenchmarkTestFiller,
-    pre: Alloc,
-    fork: Fork,
-    gas_benchmark_value: int,
-    tx_gas_limit: int,
-    code_size: int,
-) -> None:
+def deployment_txs(
+    pre: Alloc, fork: Fork, tx_gas_limit: int, code_size: int
+) -> tuple[list[TransactionWithCost], dict]:
     """
-    Deploy the contracts behind the `AccountMode.EXISTING_CONTRACT_*`
-    receivers via the deterministic CREATE2 factory.
-
-    Delegate deterministic EOAs to EXISTING_CONTRACT_DIFF_MAX receivers.
+    Return the CREATE2 deployments of every receiver mode at `code_size`,
+    the EIP-7702 delegations to its DIFF receivers, and the post checks.
     """
     contract_modes = list(CONTRACT_MODES)
     # One STOP byte: same initcode and CREATE2 address at every code size,
@@ -238,6 +214,72 @@ def test_deploy_existing_contracts(
             )
         )
 
+    return txs, post
+
+
+# Osaka-sized contracts are deployable from Osaka: the only Amsterdam
+# dependency here is the larger code size itself, and `create_state_gas`
+# returns 0 before EIP-8037. Filling this pre-fork lets a shadow fork carry
+# the receivers across the Amsterdam transition instead of starting past it.
+@pytest.mark.valid_from("Osaka")
+@pytest.mark.parametrize(
+    "code_size",
+    [
+        pytest.param(
+            Osaka.max_code_size(), marks=pytest.mark.valid_from("Osaka")
+        ),
+        pytest.param(
+            Amsterdam.max_code_size(),
+            marks=pytest.mark.valid_from("Amsterdam"),
+        ),
+    ],
+)
+def test_deploy_existing_contracts(
+    benchmark_test: BenchmarkTestFiller,
+    pre: Alloc,
+    fork: Fork,
+    gas_benchmark_value: int,
+    tx_gas_limit: int,
+    code_size: int,
+) -> None:
+    """
+    Deploy the contracts behind the `AccountMode.EXISTING_CONTRACT_*`
+    receivers via the deterministic CREATE2 factory.
+
+    Delegate deterministic EOAs to EXISTING_CONTRACT_DIFF_MAX receivers.
+    """
+    txs, post = deployment_txs(pre, fork, tx_gas_limit, code_size)
+    benchmark_test(
+        post=post,
+        blocks=pack_transactions_with_cost_into_blocks(
+            txs, gas_benchmark_value
+        ),
+        skip_gas_used_validation=True,
+        expected_receipt_status=1,
+    )
+
+
+# Amsterdam runs test_account_access at both code sizes, and a pre-run fills
+# one test (--no-reset-between-tests never re-reads the head), so one test
+# deploys both sets. The addresses match the per-size tests: CREATE2 and the
+# delegation keys depend on the code size, not the fork.
+@pytest.mark.valid_from("Amsterdam")
+def test_deploy_existing_contracts_all_sizes(
+    benchmark_test: BenchmarkTestFiller,
+    pre: Alloc,
+    fork: Fork,
+    gas_benchmark_value: int,
+    tx_gas_limit: int,
+) -> None:
+    """Deploy the receivers at the Osaka and the Amsterdam code size."""
+    txs: list[TransactionWithCost] = []
+    post: dict = {}
+    for code_size in (Osaka.max_code_size(), Amsterdam.max_code_size()):
+        size_txs, size_post = deployment_txs(
+            pre, fork, tx_gas_limit, code_size
+        )
+        txs += size_txs
+        post |= size_post
     benchmark_test(
         post=post,
         blocks=pack_transactions_with_cost_into_blocks(
